@@ -1,176 +1,108 @@
 package lesson_db;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.LocalDate;
 
-class DataBase {
-    private Connection dbCon;
+public class DataBase {
 
-    private Connection getDBConnection() {
-        String host = "localhost";
-        String port = "5432";
-        String dbName = "idiot"; // Убедитесь, что база данных создана
-        String str = "jdbc:postgresql://" + host + ":" + port + "/" + dbName;
+    private Connection connection;
+
+    public DataBase() {
         try {
-            Class.forName("org.postgresql.Driver");
-            String login = "postgres";
-            String password = "";
-            dbCon = DriverManager.getConnection(str, login, password);
-            System.out.println("Соединение установлено");
-        } catch (ClassNotFoundException e) {
-            System.out.println("Драйвер не найден");
+            this.connection = DatabaseConnection.getConnection();
         } catch (SQLException e) {
-            System.out.println("Неверный путь (логин и пароль)");
-        }
-        return dbCon;
-    }
-
-    public void isConnection() throws SQLException {
-        dbCon = getDBConnection();
-        System.out.println(dbCon.isValid(1000));
-    }
-
-    public void createTables() {
-        String createProductsTable = "CREATE TABLE IF NOT EXISTS Products (id SERIAL PRIMARY KEY, name VARCHAR(50), price DECIMAL)";
-        String createCustomersTable = "CREATE TABLE IF NOT EXISTS Customers (id SERIAL PRIMARY KEY, name VARCHAR(50), email VARCHAR(50))";
-        String createOrdersTable = "CREATE TABLE IF NOT EXISTS Orders (id SERIAL PRIMARY KEY, customer_id INT, order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (customer_id) REFERENCES Customers(id))";
-        String createOrderItemsTable = "CREATE TABLE IF NOT EXISTS OrderItems (id SERIAL PRIMARY KEY, order_id INT, product_id INT, quantity INT, FOREIGN KEY (order_id) REFERENCES Orders(id), FOREIGN KEY (product_id) REFERENCES Products(id))";
-
-        try (Statement statement = getDBConnection().createStatement()) {
-            statement.executeUpdate(createProductsTable);
-            statement.executeUpdate(createCustomersTable);
-            statement.executeUpdate(createOrdersTable);
-            statement.executeUpdate(createOrderItemsTable);
-            System.out.println("Таблицы созданы");
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
+            System.err.println("Ошибка подключения к базе данных: " + e.getMessage());
         }
     }
 
-    public void addProducts() {
-        String[] productNames = {
-                "Laptop Pro X", "Smartphone Z10", "Wireless Headphones", "Gaming Mouse", "External SSD 1TB",
-                "Bluetooth Speaker", "4K Monitor", "Mechanical Keyboard", "USB-C Hub", "Portable Power Bank",
-                "Digital Camera", "Noise Cancelling Earbuds", "Tablet Air 8", "Gaming Console X", "Fitness Tracker",
-                "Smartwatch Pro", "Printer All-in-One", "External HDD 2TB", "VR Headset", "Studio Microphone",
-                "Gaming Chair", "Coffee Maker", "Air Fryer", "Refrigerator", "Washing Machine", "Dishwasher",
-                "LED TV 55 Inch", "Soundbar System", "Projector 1080p", "E-Book Reader"
-        };
-
-        double[] productPrices = {
-                999.99, 699.99, 149.99, 59.99, 119.99,
-                79.99, 299.99, 89.99, 39.99, 29.99,
-                499.99, 129.99, 349.99, 499.99, 79.99,
-                199.99, 149.99, 69.99, 299.99, 179.99,
-                199.99, 99.99, 79.99, 599.99, 449.99, 399.99,
-                349.99, 149.99, 249.99, 119.99
-        };
-
-        try (Statement statement = getDBConnection().createStatement()) {
-            for (int i = 0; i < productNames.length; i++) {
-                String sql = String.format("INSERT INTO Products (name, price) VALUES ('%s', %.2f)", productNames[i], productPrices[i]);
-                statement.executeUpdate(sql);
-            }
-            System.out.println("Добавлено 30 товаров");
+    // Проверка соединения
+    public boolean isConnection() {
+        try {
+            return connection != null && !connection.isClosed();
         } catch (SQLException e) {
-            System.out.println("Не удалось добавить товары: " + e.getMessage());
+            System.err.println("Ошибка проверки соединения: " + e.getMessage());
+            return false;
         }
     }
 
-    public void addCustomers() {
-        try (Statement statement = getDBConnection().createStatement()) {
-            for (int i = 1; i <= 30; i++) {
-                String sql = String.format("INSERT INTO Customers (name, email) VALUES ('Customer%d', 'customer%d@example.com')", i, i);
-                statement.executeUpdate(sql);
-            }
-            System.out.println("Добавлено 30 клиентов");
+    // Добавление новой брони
+    public void addBooking(int roomId, String guestName) {
+        String sql = "INSERT INTO bookings (room_id, guest_name, booking_date) VALUES (?, ?, ?)";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, roomId);
+            statement.setString(2, guestName);
+            statement.setDate(3, java.sql.Date.valueOf(LocalDate.now()));
+            statement.executeUpdate();
+
+            // Обновляем статус номера на "забронирован"
+            updateRoomStatus(roomId, true);
+            System.out.println("Бронирование успешно добавлено.");
         } catch (SQLException e) {
-            System.out.println("Не удалось добавить клиентов: " + e.getMessage());
+            System.err.println("Ошибка при добавлении бронирования: " + e.getMessage());
         }
     }
+    // Вывод всех бронирований
+    public void getAllBookings() {
+        String sql = "SELECT b.id, r.room_number, b.guest_name, b.booking_date FROM bookings b JOIN rooms r ON b.room_id = r.id";
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(sql)) {
 
-    public void addOrders() {
-        try (Statement statement = getDBConnection().createStatement()) {
-            for (int i = 1; i <= 30; i++) {
-                int customerId = (int) (Math.random() * 30) + 1; // случайный id клиента
-                String sql = String.format("INSERT INTO Orders (customer_id) VALUES (%d)", customerId);
-                statement.executeUpdate(sql);
-            }
-            System.out.println("Добавлено 30 заказов");
-        } catch (SQLException e) {
-            System.out.println("Не удалось добавить заказы: " + e.getMessage());
-        }
-    }
-
-    public void addOrderItems() {
-        try (Statement statement = getDBConnection().createStatement()) {
-            for (int i = 1; i <= 30; i++) {
-                int orderId = (int) (Math.random() * 30) + 1; // случайный id заказа
-                int productId = (int) (Math.random() * 30) + 1; // случайный id продукта
-                int quantity = (int) (Math.random() * 5) + 1; // случайное количество от 1 до 5
-                String sql = String.format("INSERT INTO OrderItems (order_id, product_id, quantity) VALUES (%d, %d, %d)", orderId, productId, quantity);
-                statement.executeUpdate(sql);
-            }
-            System.out.println("Добавлено 30 элементов заказов");
-        } catch (SQLException e) {
-            System.out.println("Не удалось добавить элементы заказов: " + e.getMessage());
-        }
-    }
-
-    public void selectProducts() throws SQLException {
-        ResultSet resultSet;
-        try (Statement statement = getDBConnection().createStatement()) {
-            resultSet = statement.executeQuery("SELECT * FROM Products");
-            System.out.println("\nТовары:");
+            System.out.println("Список всех бронирований:");
             while (resultSet.next()) {
                 int id = resultSet.getInt("id");
-                String name = resultSet.getString("name");
-                double price = resultSet.getDouble("price");
-                System.out.printf("%d. %s - $%.2f\n", id, name, price);
+                int roomNumber = resultSet.getInt("room_number");
+                String guestName = resultSet.getString("guest_name");
+                String bookingDate = resultSet.getDate("booking_date").toString();
+                System.out.printf("ID: %d, Номер комнаты: %d, Имя гостя: %s, Дата брони: %s%n",
+                        id, roomNumber, guestName, bookingDate);
             }
+        } catch (SQLException e) {
+            System.err.println("Ошибка при получении бронирований: " + e.getMessage());
         }
     }
 
-    public void selectCustomers() throws SQLException {
-        ResultSet resultSet;
-        try (Statement statement = getDBConnection().createStatement()) {
-            resultSet = statement.executeQuery("SELECT * FROM Customers");
-            System.out.println("\nКлиенты:");
+    // Вывод всех доступных номеров
+    public void getAvailableRooms() {
+        String sql = "SELECT * FROM rooms WHERE is_booked = FALSE";
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(sql)) {
+
+            System.out.println("Список доступных номеров:");
             while (resultSet.next()) {
                 int id = resultSet.getInt("id");
-                String name = resultSet.getString("name");
-                String email = resultSet.getString("email");
-                System.out.printf("%d. %s - %s\n", id, name, email);
+                int roomNumber = resultSet.getInt("room_number");
+                System.out.printf("ID: %d, Номер комнаты: %d%n", id, roomNumber);
             }
+        } catch (SQLException e) {
+            System.err.println("Ошибка при получении доступных номеров: " + e.getMessage());
         }
     }
 
-    public void selectOrders() throws SQLException {
-        ResultSet resultSet;
-        try (Statement statement = getDBConnection().createStatement()) {
-            resultSet = statement.executeQuery("SELECT * FROM Orders");
-            System.out.println("\nЗаказы:");
-            while (resultSet.next()) {
-                int id = resultSet.getInt("id");
-                int customerId = resultSet.getInt("customer_id");
-                Timestamp orderDate = resultSet.getTimestamp("order_date");
-                System.out.printf("%d. Клиент ID: %d - Дата заказа: %s\n", id, customerId, orderDate);
-            }
+    // Обновление статуса номера
+    private void updateRoomStatus(int roomId, boolean isBooked) {
+        String sql = "UPDATE rooms SET is_booked = ? WHERE id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setBoolean(1, isBooked);
+            statement.setInt(2, roomId);
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("Ошибка при обновлении статуса номера: " + e.getMessage());
         }
     }
 
-    public void selectOrderItems() throws SQLException {
-        ResultSet resultSet;
-        try (Statement statement = getDBConnection().createStatement()) {
-            resultSet = statement.executeQuery("SELECT * FROM OrderItems");
-            System.out.println("\nЭлементы заказов:");
-            while (resultSet.next()) {
-                int id = resultSet.getInt("id");
-                int orderId = resultSet.getInt("order_id");
-                int productId = resultSet.getInt("product_id");
-                int quantity = resultSet.getInt("quantity");
-                System.out.printf("%d. Заказ ID: %d - Продукт ID: %d - Количество: %d\n", id, orderId, productId, quantity);
+    // Закрытие соединения
+    public void closeConnection() {
+        try {
+            if (connection != null && !connection.isClosed()) {
+                connection.close();
+                System.out.println("Соединение закрыто.");
             }
+        } catch (SQLException e) {
+            System.err.println("Ошибка при закрытии соединения: " + e.getMessage());
         }
     }
 }
-
