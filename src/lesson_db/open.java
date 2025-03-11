@@ -16,8 +16,8 @@ public class open {
             // Вывод всех бронирований
             db.getAllBookings();
 
-            // Вывод доступных номеров
-            db.getAvailableRooms();
+            // Вывод свободных мест
+            db.getAvailableSeats();
 
             // Закрытие соединения
             db.closeConnection();
